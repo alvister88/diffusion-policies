@@ -15,13 +15,13 @@ env_runner:
 
 dataset:
   _target_: shared.env.merlin.merlin_image_dataset.MerlinImageDataset
-  dataset_path: data
+  dataset_path: data5
   shape_meta: *shape_meta
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1'}
   pad_after: ${eval:'${num_action_steps}-1'}
   seed: 42
-  val_ratio: 0.2
+  val_ratio: 0.15
   max_train_episodes: null
   num_obs_steps: ${dataset_obs_steps}
   num_latency_steps: ${num_latency_steps}

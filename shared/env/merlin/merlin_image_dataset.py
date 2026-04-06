@@ -269,7 +269,8 @@ class MerlinImageDataset(Dataset):
             relative = absolute_to_relative(abs_action)
             all_relative.append(relative)
         all_relative = np.concatenate(all_relative, axis=0)
-        normalizer["action"] = SingleFieldLinearNormalizer.create_fit(all_relative, mode="gaussian")
+        # normalizer["action"] = SingleFieldLinearNormalizer.create_fit(all_relative, mode="gaussian")
+        normalizer["action"] = SingleFieldLinearNormalizer.create_fit(all_relative)
 
         for key in self.lowdim_keys:
             normalizer[key] = SingleFieldLinearNormalizer.create_fit(
