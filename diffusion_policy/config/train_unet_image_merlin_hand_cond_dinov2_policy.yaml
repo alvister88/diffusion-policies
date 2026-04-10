@@ -15,7 +15,7 @@ exp_name: "hand_cond_dinov2"
 horizon: 16
 num_obs_steps: 1
 num_action_steps: 8
-num_inference_steps: 100
+num_inference_steps: 16
 num_latency_steps: 0
 dataset_obs_steps: ${num_obs_steps}
 past_action_visible: False
@@ -28,12 +28,11 @@ policy:
   shape_meta: ${shape_meta}
 
   noise_scheduler:
-    _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
-    num_train_timesteps: 100
+    _target_: diffusers.schedulers.scheduling_ddim.DDIMScheduler
+    num_train_timesteps: 50
     beta_start: 0.0001
     beta_end: 0.02
     beta_schedule: squaredcos_cap_v2
-    variance_type: fixed_small
     clip_sample: True
     prediction_type: epsilon
 
