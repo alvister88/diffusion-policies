@@ -14,8 +14,8 @@ exp_name: "dinov2"
 # This should be changed?
 horizon: 16
 num_obs_steps: 1
-num_action_steps: 8
-num_inference_steps: 16
+num_action_steps: 4
+num_inference_steps: 4
 num_latency_steps: 0
 dataset_obs_steps: ${num_obs_steps}
 past_action_visible: False
@@ -80,14 +80,14 @@ ema:
   max_value: 0.9999
 
 dataloader:
-  batch_size: 224
+  batch_size: 256
   num_workers: 4
   shuffle: True
   pin_memory: True
   persistent_workers: False
 
 val_dataloader:
-  batch_size: 224
+  batch_size: 256
   num_workers: 3
   shuffle: False
   pin_memory: False
@@ -107,7 +107,7 @@ training:
   resume: False
   lr_scheduler: cosine
   lr_warmup_steps: 500
-  num_epochs: 1500
+  num_epochs: 500
   gradient_accumulate_every: 1
   use_ema: True
   freeze_encoder: False # Should maybe freeze encoder for low data regime; 

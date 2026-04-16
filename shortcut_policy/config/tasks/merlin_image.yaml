@@ -3,7 +3,7 @@ name: merlin_image
 image_shape: &image_shape [3, 240, 320]
 shape_meta: &shape_meta
   obs:
-    camera_0:
+    image:
       shape: *image_shape
       type: rgb
   action:
@@ -15,7 +15,7 @@ env_runner:
 
 dataset:
   _target_: shared.env.merlin.merlin_image_dataset.MerlinImageDataset
-  dataset_path: data3
+  dataset_path: data5
   shape_meta: *shape_meta
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1'}
@@ -24,8 +24,7 @@ dataset:
   val_ratio: 0.15
   max_train_episodes: null
   num_obs_steps: ${dataset_obs_steps}
-  num_latency_steps: ${num_latency_steps}
-  # From dataset.py in MERLIN
+  num_latency_steps: ${n_latency_steps}
   first_cut: 0
   encoder_window: 8
   use_cache: False

@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from typing import Dict, Tuple
-from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
 from shared.models.common.normalizer import LinearNormalizer
 from shared.models.unet.conditional_unet1d import ConditionalUnet1D
@@ -31,7 +30,6 @@ class UnetImageShortcutPolicy(nn.Module):
     def __init__(
         self,
         shape_meta: dict,
-        noise_scheduler: DDPMScheduler,
         obs_encoder: ObsEncoder,
         horizon: int,
         num_action_steps: int,
@@ -69,7 +67,6 @@ class UnetImageShortcutPolicy(nn.Module):
 
         self.obs_encoder = obs_encoder
         self.model = model
-        self.noise_scheduler = noise_scheduler
         self.mask_generator = LowdimMaskGenerator(
             action_dim_Fa=action_dim_Fa,
             obs_feat_dim_Fo=0 if global_obs_cond else obs_feat_dim_Fo,
