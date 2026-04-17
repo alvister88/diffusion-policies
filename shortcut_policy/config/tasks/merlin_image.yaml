@@ -15,7 +15,7 @@ env_runner:
 
 dataset:
   _target_: shared.env.merlin.merlin_image_dataset.MerlinImageDataset
-  dataset_path: data5
+  dataset_path: data3
   shape_meta: *shape_meta
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1'}
