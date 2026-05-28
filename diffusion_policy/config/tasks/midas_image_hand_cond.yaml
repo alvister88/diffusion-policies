@@ -18,7 +18,7 @@ env_runner:
 
 dataset:
   _target_: shared.env.midas.midas_image_dataset.MidasImageDataset
-  dataset_path: data_midas
+  dataset_path: data_midas2
   shape_meta: *shape_meta
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1'}
@@ -30,4 +30,5 @@ dataset:
   num_latency_steps: ${num_latency_steps}
   first_cut: 0
   encoder_window: 0
+  sync_downsample_stride: 2
   use_cache: False
