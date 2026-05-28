@@ -75,16 +75,24 @@ class MidasImageDataset(Dataset):
         max_train_episodes: int = None,
         first_cut: int = 0,
         encoder_window: int = 0,
+        sync_downsample_stride: int = 1,
     ):
         super().__init__()
 
         assert os.path.isdir(dataset_path), f"Dataset path does not exist: {dataset_path}"
+        sync_downsample_stride = int(sync_downsample_stride)
+        if sync_downsample_stride < 1:
+            raise ValueError(
+                "sync_downsample_stride must be >= 1, "
+                f"got {sync_downsample_stride}."
+            )
 
         if use_cache:
             cache_key = {
                 "shape_meta": OmegaConf.to_container(shape_meta),
                 "first_cut": int(first_cut),
                 "encoder_window": int(encoder_window),
+                "sync_downsample_stride": sync_downsample_stride,
             }
             cache_hash = hashlib.md5(
                 json.dumps(cache_key, sort_keys=True).encode("utf-8")
@@ -104,6 +112,7 @@ class MidasImageDataset(Dataset):
                             shape_meta=shape_meta,
                             first_cut=first_cut,
                             encoder_window=encoder_window,
+                            sync_downsample_stride=sync_downsample_stride,
                             store=zarr.MemoryStore(),
                         )
                         print("[MidasImageDataset] Saving cache")
@@ -129,6 +138,7 @@ class MidasImageDataset(Dataset):
                 shape_meta=shape_meta,
                 first_cut=first_cut,
                 encoder_window=encoder_window,
+                sync_downsample_stride=sync_downsample_stride,
                 store=zarr.MemoryStore(),
             )
 
@@ -181,6 +191,7 @@ class MidasImageDataset(Dataset):
         self.pad_after = pad_after
         self.first_cut = int(first_cut)
         self.encoder_window = int(encoder_window)
+        self.sync_downsample_stride = sync_downsample_stride
 
         print(
             "[MidasImageDataset] Replay buffer: "
@@ -318,6 +329,7 @@ def _build_replay_buffer(
     shape_meta: dict,
     first_cut: int,
     encoder_window: int,
+    sync_downsample_stride: int,
     store,
 ) -> ReplayBuffer:
     obs_shape_meta = shape_meta["obs"]
@@ -431,6 +443,14 @@ def _build_replay_buffer(
         frame_idx = frame_idx[first_cut:]
         encoder_idx = encoder_idx[first_cut:]
         pose_idx = pose_idx[first_cut:]
+        if sync_downsample_stride > 1:
+            frame_idx = frame_idx[::sync_downsample_stride]
+            encoder_idx = encoder_idx[::sync_downsample_stride]
+            pose_idx = pose_idx[::sync_downsample_stride]
+
+        if len(frame_idx) == 0:
+            dropped_episodes += 1
+            continue
 
         smoothed_hand = _rolling_average(raw_hand, window=encoder_window)
         video_frames = _load_video_rgb(vid_files[i], out_hw=(out_h, out_w))

@@ -28,7 +28,7 @@ class MerlinPolicyInference:
         device: Optional[str] = None,
         use_ema: bool = True,
         num_inference_steps: Optional[int] = None,
-        action_mode: str = "first",
+        action_mode: str = "chunk",
     ):
         if action_mode not in {"first", "chunk", "all"}:
             raise ValueError(
