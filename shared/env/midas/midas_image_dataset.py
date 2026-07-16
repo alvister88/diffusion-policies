@@ -365,10 +365,17 @@ def _build_replay_buffer(
                 raise ValueError(
                     f"Low-dim obs '{key}' must have shape [13], got {shape}"
                 )
+        elif key == "tactile_z":
+            if shape != (4,):
+                raise ValueError(
+                    f"Low-dim obs '{key}' must have shape [4] "
+                    "(per-finger [mean, max] Fz for thumb/index), "
+                    f"got {shape}"
+                )
         else:
             raise ValueError(
                 f"Unsupported low-dim obs key '{key}' for MIDAS dataset conversion. "
-                "Supported keys: hand_pose_abs."
+                "Supported keys: hand_pose_abs, tactile_z."
             )
 
     action_shape = tuple(shape_meta["action"]["shape"])
@@ -379,12 +386,18 @@ def _build_replay_buffer(
 
     midas_root = _resolve_midas_root(dataset_path)
 
+    use_tactile = "tactile_z" in lowdim_keys
+
     video_dir = os.path.join(midas_root, "camera", "mp4_files")
     encoder_dir = os.path.join(midas_root, "processed_encoder_t")
     action_dir = os.path.join(midas_root, "absolute_action_t")
+    tactile_dir = os.path.join(midas_root, "processed_tactile_t")
     sync_dir = os.path.join(midas_root, "syncs")
 
-    for required_dir in [video_dir, encoder_dir, action_dir, sync_dir]:
+    required_dirs = [video_dir, encoder_dir, action_dir, sync_dir]
+    if use_tactile:
+        required_dirs.append(tactile_dir)
+    for required_dir in required_dirs:
         if not os.path.isdir(required_dir):
             raise FileNotFoundError(
                 f"Required MIDAS directory not found: {required_dir}"
@@ -394,6 +407,7 @@ def _build_replay_buffer(
     enc_files = _sorted_files(encoder_dir, ".npy")
     act_files = _sorted_files(action_dir, ".npy")
     sync_files = _sorted_files(sync_dir, ".npz")
+    tac_files = _sorted_files(tactile_dir, ".npy") if use_tactile else []
 
     n = len(vid_files)
     if not (len(enc_files) == n and len(act_files) == n and len(sync_files) == n):
@@ -401,6 +415,11 @@ def _build_replay_buffer(
             "MIDAS file count mismatch after sorting: "
             f"video={len(vid_files)} encoder={len(enc_files)} "
             f"action={len(act_files)} sync={len(sync_files)}"
+        )
+    if use_tactile and len(tac_files) != n:
+        raise RuntimeError(
+            "MIDAS tactile file count mismatch after sorting: "
+            f"video={n} tactile={len(tac_files)}"
         )
 
     replay_buffer = ReplayBuffer.create_empty_zarr(storage=store)
@@ -413,6 +432,7 @@ def _build_replay_buffer(
         raw_hand = np.load(enc_files[i]).astype(np.float32)
         raw_eef = np.load(act_files[i]).astype(np.float32)
         sync_data = np.load(sync_files[i])
+        raw_tactile = np.load(tac_files[i]).astype(np.float32) if use_tactile else None
 
         if raw_hand.ndim != 2 or raw_hand.shape[1] != 13:
             raise ValueError(
@@ -424,12 +444,28 @@ def _build_replay_buffer(
                 "MIDAS EEF file must have shape [T, 6], "
                 f"got {raw_eef.shape}: {act_files[i]}"
             )
+        if use_tactile and (raw_tactile.ndim != 2 or raw_tactile.shape[1] != 4):
+            raise ValueError(
+                "MIDAS tactile file must have shape [T, 4], "
+                f"got {raw_tactile.shape}: {tac_files[i]}"
+            )
 
         frame_idx = sync_data["frame_idx"].astype(np.int64)
         encoder_idx = sync_data["encoder_idx"].astype(np.int64)
         pose_idx = sync_data["pose_idx"].astype(np.int64)
+        tactile_idx = None
+        if use_tactile:
+            if "tactile_idx" not in sync_data:
+                raise KeyError(
+                    f"sync file missing 'tactile_idx' (reprocess with tactile "
+                    f"support): {sync_files[i]}"
+                )
+            tactile_idx = sync_data["tactile_idx"].astype(np.int64)
 
-        if not (len(frame_idx) == len(encoder_idx) == len(pose_idx)):
+        sync_lengths = [len(frame_idx), len(encoder_idx), len(pose_idx)]
+        if use_tactile:
+            sync_lengths.append(len(tactile_idx))
+        if len(set(sync_lengths)) != 1:
             print(
                 f"[MidasImageDataset] Dropping episode {i}: sync array length mismatch"
             )
@@ -443,10 +479,14 @@ def _build_replay_buffer(
         frame_idx = frame_idx[first_cut:]
         encoder_idx = encoder_idx[first_cut:]
         pose_idx = pose_idx[first_cut:]
+        if use_tactile:
+            tactile_idx = tactile_idx[first_cut:]
         if sync_downsample_stride > 1:
             frame_idx = frame_idx[::sync_downsample_stride]
             encoder_idx = encoder_idx[::sync_downsample_stride]
             pose_idx = pose_idx[::sync_downsample_stride]
+            if use_tactile:
+                tactile_idx = tactile_idx[::sync_downsample_stride]
 
         if len(frame_idx) == 0:
             dropped_episodes += 1
@@ -473,6 +513,17 @@ def _build_replay_buffer(
         pose_idx = np.clip(pose_idx, 0, max_pose)
         encoder_idx = np.clip(encoder_idx, 0, max_hand)
 
+        episode_tactile = None
+        if use_tactile:
+            if len(raw_tactile) == 0:
+                print(
+                    f"[MidasImageDataset] Dropping episode {i}: empty tactile array"
+                )
+                dropped_episodes += 1
+                continue
+            tactile_idx = np.clip(tactile_idx, 0, len(raw_tactile) - 1)
+            episode_tactile = raw_tactile[tactile_idx].astype(np.float32)
+
         episode_images = video_frames[frame_idx]
         episode_eef = raw_eef[pose_idx].astype(np.float32)
         episode_hand = smoothed_hand[encoder_idx].astype(np.float32)
@@ -486,6 +537,8 @@ def _build_replay_buffer(
         }
         if "hand_pose_abs" in lowdim_keys:
             episode["hand_pose_abs"] = episode_hand.astype(np.float32)
+        if use_tactile:
+            episode["tactile_z"] = episode_tactile.astype(np.float32)
 
         replay_buffer.add_episode(episode)
         kept_episodes += 1

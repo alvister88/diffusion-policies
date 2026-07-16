@@ -9,6 +9,9 @@ shape_meta: &shape_meta
     hand_pose_abs:
       shape: [13]
       type: low_dim
+    tactile_z:
+      shape: [4]
+      type: low_dim
   action:
     shape: [19]
 
@@ -18,7 +21,7 @@ env_runner:
 
 dataset:
   _target_: shared.env.midas.midas_image_dataset.MidasImageDataset
-  dataset_path: data_midas2
+  dataset_path: /data/jun/Jonathan/data_midas9_crop
   shape_meta: *shape_meta
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1'}
