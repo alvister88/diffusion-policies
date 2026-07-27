@@ -1,0 +1,317 @@
+  <!DOCTYPE html><html lang="en-US" data-resin-client="web"><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"><meta name="viewport" content="width=device-width, initial-scale=1.0"> <meta name="robots" content="noindex"> <title>Box | Login</title>    <link rel="stylesheet" href="https://cdn01.boxcdn.net/webapp_assets/login/css/login-92a4b8c805.css">   <style id="head-custom-branding">
+
+.main-header { background-color: #3182C0; border-bottom-color: #296ea3;
+}
+
+.main-header span,
+.main-header .header-marketing-link,
+.main-header .lnk,
+.main-header .lnk:hover,
+.main-header .btn,
+.main-header .btn:hover,
+.main-header .btn:active { border-color: #FFFFFF !important; color: #FFFFFF !important;
+}
+
+.main-header svg path { fill: #FFFFFF;
+}
+
+/* Common Elements */   
+
+/* Button styles for overriding box-ui - overwrites styles in amsterdam/overrides/buttons.css */
+
+.btn:focus { border: 1px solid #3182C0;
+}
+
+.btn-primary { background: -ms-linear-gradient(top, #3182C0 0%, #2e7cb7 100%); /* IE10+ */ background-image: -webkit-linear-gradient(top, #3182C0 0%, #2e7cb7 100%); background-image: linear-gradient(to bottom, #3182C0 0%, #2e7cb7 100%); filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#3182C0', endColorstr='#2e7cb7', GradientType=0); /* IE6-9 */ border: 1px solid #296ea3; color: #FFFFFF; transition: none;
+    -webkit-transition: none;
+}
+
+.btn-primary:hover { background-color: #3387c8; background-image: none; border-color: #2c76af; box-shadow: 0 1px 1px rgba(0, 0, 0, 0.15); color: #FFFFFF;
+}
+
+.btn-primary:focus { background-color: #3387c8; background-image: none; border-color: #2c76af; box-shadow: inset 0 0 0 1px #f3f8fc, 0 1px 1px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary:active:hover,
+.btn-primary:active { background-color: #2a71a7; background-image: none; border-color: #286b9f; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.1);
+}
+
+/* New Login Design - Custom Enterprise Colors */
+.enable-new-login .btn-primary,
+.enable-new-login .login-container .btn-primary,
+.enable-new-login .sso-login-main-body .login-link-sso .btn-primary,
+.tos-new-page.enable-new-login .btn-primary { background: #3182C0 !important; background-image: none !important; border: 1px solid #FFFFFF20 !important; color: #FFFFFF !important; box-shadow: none !important;
+}
+
+.enable-new-login .btn-primary:hover,
+.enable-new-login .login-container .btn-primary:hover,
+.enable-new-login .sso-login-main-body .login-link-sso .btn-primary:hover,
+.tos-new-page.enable-new-login .btn-primary:hover { background: #2a71a7 !important; border-color: #FFFFFF20 !important; color: #FFFFFF !important; box-shadow: none !important;
+}
+
+.enable-new-login .btn-primary:active,
+.enable-new-login .login-container .btn-primary:active,
+.enable-new-login .sso-login-main-body .login-link-sso .btn-primary:active,
+.tos-new-page.enable-new-login .btn-primary:active { background: #266697 !important; border-color: #FFFFFF20 !important; color: #FFFFFF !important; box-shadow: none !important;
+}
+
+.enable-new-login .btn-primary:focus-visible,
+.enable-new-login .login-container .btn-primary:focus-visible,
+.enable-new-login .sso-login-main-body .login-link-sso .btn-primary:focus-visible,
+.tos-new-page.enable-new-login .btn-primary:focus-visible { outline: none !important; box-shadow: 0 0 0 1px #ffffff, 0 0 0 0.1875rem #2486fc !important;
+}
+
+.enable-new-login .btn-primary:focus:not(:focus-visible),
+.enable-new-login .login-container .btn-primary:focus:not(:focus-visible),
+.enable-new-login .sso-login-main-body .login-link-sso .btn-primary:focus:not(:focus-visible),
+.tos-new-page.enable-new-login .btn-primary:focus:not(:focus-visible) { outline: none !important; box-shadow: none !important;
+} 
+</style><link rel="apple-touch-icon" sizes="57x57" href="https://cdn01.boxcdn.net/_assets/img/favicons/apple-touch-icon-57x57-fLlEpj.png">
+<link rel="apple-touch-icon" sizes="60x60" href="https://cdn01.boxcdn.net/_assets/img/favicons/apple-touch-icon-60x60-Uv0qzu.png">
+<link rel="apple-touch-icon" sizes="72x72" href="https://cdn01.boxcdn.net/_assets/img/favicons/apple-touch-icon-72x72-7aVqne.png">
+<link rel="apple-touch-icon" sizes="76x76" href="https://cdn01.boxcdn.net/_assets/img/favicons/apple-touch-icon-76x76-ZVGnRV.png">
+<link rel="apple-touch-icon" sizes="114x114" href="https://cdn01.boxcdn.net/_assets/img/favicons/apple-touch-icon-114x114-busq-D.png">
+<link rel="apple-touch-icon" sizes="120x120" href="https://cdn01.boxcdn.net/_assets/img/favicons/apple-touch-icon-120x120-K-u4U5.png">
+<link rel="apple-touch-icon" sizes="144x144" href="https://cdn01.boxcdn.net/_assets/img/favicons/apple-touch-icon-144x144-va9pYs.png">
+<link rel="apple-touch-icon" sizes="152x152" href="https://cdn01.boxcdn.net/_assets/img/favicons/apple-touch-icon-152x152-r5tWgh.png">
+<link rel="apple-touch-icon" sizes="180x180" href="https://cdn01.boxcdn.net/_assets/img/favicons/apple-touch-icon-180x180-tV001c.png">
+<link rel="icon" type="image/png" href="https://cdn01.boxcdn.net/_assets/img/favicons/favicon-32x32-VwW37b.png" sizes="32x32">
+<link rel="icon" type="image/png" href="https://cdn01.boxcdn.net/_assets/img/favicons/android-chrome-192x192-96i97M.png" sizes="192x192">
+<link rel="icon" type="image/png" href="https://cdn01.boxcdn.net/_assets/img/favicons/favicon-96x96-XU7UE1.png" sizes="96x96">
+<link rel="icon" type="image/png" href="https://cdn01.boxcdn.net/_assets/img/favicons/favicon-16x16-_kQSW4.png" sizes="16x16">
+<link rel="manifest" href="https://cdn01.boxcdn.net/_assets/img/favicons/manifest-rw1AEP.json">
+<link rel="mask-icon" href="https://cdn01.boxcdn.net/_assets/img/favicons/safari-pinned-tab-jyt2W4.svg">
+<link rel="shortcut icon" href="https://cdn01.boxcdn.net/_assets/img/favicons/favicon-yz-tj-.ico">
+<meta name="msapplication-TileColor" content="#da532c">
+<meta name="msapplication-TileImage" content="https://cdn01.boxcdn.net/_assets/img/favicons/mstile-144x144-pllCM8.png">
+<meta name="msapplication-config" content="https://cdn01.boxcdn.net/_assets/img/favicons/browserconfig-fdBReK.xml">
+<meta name="theme-color" content="#ffffff">
+   <script src=https://assets.adobedtm.com/6055abd7bbba/d65e1bde628e/launch-7ccf3e9424fa.min.js async></script></head><!--[if lte IE 9]><body class="ie ie9 lte_ie9 enable-new-login" data-resin-application="login"><![endif]--><!--[if gt IE 9]><body class="enable-new-login" data-resin-application="login"><![endif]--><!--[if !IE]><!--><body class="enable-new-login" data-resin-application="login"><!--<![endif]--><div class="login-wrapper" data-resin-page="login">   <div class="main-header" data-module="login-header">
+    <div class="header-inner">
+        
+        <a href="https://www.box.com/home" class="header-logo" aria-label="Visit the Box homepage" rel="noopener noreferrer">
+            
+             <svg class="logo" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="49px" height="27px" viewBox="0 0 49 27" version="1.1" role="img"><g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd"><g fill="#0061D5"><path d="M48.2 23.6 C48.8 24.4 48.7 25.5 47.9 26.1 C47 26.7 45.9 26.6 45.3 25.8 L45.3 25.8 L41.1 20.4 L37 25.8 L37 25.8 C36.4 26.6 35.2 26.7 34.4 26.1 C33.6 25.5 33.4 24.4 34 23.6 L34 23.6 L38.8 17.3 L34 11.1 L34 11.1 C33.4 10.3 33.6 9.1 34.4 8.5 C35.2 7.9 36.4 8.1 37 8.9 L37 8.9 L41.1 14.3 L45.3 8.9 L45.3 8.9 C45.9 8.1 47 7.9 47.9 8.5 C48.7 9.1 48.8 10.3 48.2 11.1 L48.2 11.1 L43.5 17.3 L48.2 23.6 L48.2 23.6 L48.2 23.6 ZM26.3 22.8 C23.2 22.8 20.7 20.4 20.7 17.3 C20.7 14.3 23.2 11.8 26.3 11.8 C29.4 11.8 31.9 14.3 31.9 17.3 C31.9 20.4 29.4 22.8 26.3 22.8 L26.3 22.8 ZM9.8 22.8 C6.7 22.8 4.2 20.4 4.2 17.3 C4.2 14.3 6.7 11.8 9.8 11.8 C12.9 11.8 15.4 14.3 15.4 17.3 C15.4 20.4 12.9 22.8 9.8 22.8 L9.8 22.8 ZM26.3 8.2 C22.8 8.2 19.7 10.1 18.1 13 C16.5 10.1 13.4 8.2 9.8 8.2 C7.7 8.2 5.8 8.9 4.2 10 L4.2 2.3 L4.2 2.3 C4.2 1.3 3.4 0.5 2.4 0.5 C1.3 0.5 0.5 1.3 0.5 2.3 L0.5 2.3 L0.5 17.5 L0.5 17.5 C0.6 22.5 4.7 26.5 9.8 26.5 C13.4 26.5 16.5 24.5 18.1 21.6 C19.7 24.5 22.8 26.5 26.3 26.5 C31.5 26.5 35.7 22.4 35.7 17.3 C35.7 12.3 31.5 8.2 26.3 8.2 L26.3 8.2 Z" /></g></g></svg>
+        </a>
+
+        <div class="header-right">
+            
+                
+<span class="header-language-selector menu-wrapper ">
+    <a class="lnk" data-type="menu-toggle-button" tabindex="0">
+         <svg class="footer-icon-globe" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M8 0C3.57 0 0 3.57 0 8s3.57 8 8 8 8-3.57 8-8-3.57-8-8-8zm-.862 14.4C4.062 13.908 1.6 11.323 1.6 8c0-.492.123-.985.123-1.477l3.815 3.815v.862c0 .862.74 1.6 1.6 1.6v1.6zm5.54-2.092c-.247-.616-.863-1.108-1.478-1.108h-.862V8.738c0-.37-.246-.738-.738-.738H4.8V6.4h1.6c.492 0 .862-.37.862-.862V4.062h1.6c.86 0 1.6-.74 1.6-1.6v-.37C12.8 3.077 14.4 5.292 14.4 8c0 1.723-.615 3.2-1.723 4.308z" fill="#666" fill-rule="evenodd"/></svg>
+        <span class="header-language-selector-text">English (US)</span>
+        <span class="header-language-selector-arrow-down"></span>
+    </a>
+
+    <ul class="menu is-right-aligned header-language-selector-menu">
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=da-DK" class="menu-option">
+                    Dansk
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=de-DE" class="menu-option">
+                    Deutsch
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=en-AU" class="menu-option">
+                    English (Australia)
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=en-CA" class="menu-option">
+                    English (Canada)
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=en-GB" class="menu-option">
+                    English (UK)
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=en-US" class="menu-option">
+                    English (US)
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=es-ES" class="menu-option">
+                    Español
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=es-419" class="menu-option">
+                    Español (Latinoamérica)
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=fr-FR" class="menu-option">
+                    Français
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=fr-CA" class="menu-option">
+                    Français (Canada)
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=it-IT" class="menu-option">
+                    Italiano
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=nl-NL" class="menu-option">
+                    Nederlands
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=nb-NO" class="menu-option">
+                    Norsk (Bokmål)
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=pl-PL" class="menu-option">
+                    Polski
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=pt-BR" class="menu-option">
+                    Português
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=fi-FI" class="menu-option">
+                    Suomi
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=sv-SE" class="menu-option">
+                    Svenska
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=tr-TR" class="menu-option">
+                    Türkçe
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=ru-RU" class="menu-option">
+                    Русский
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=hi-IN" class="menu-option">
+                    हिन्दी
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=bn-IN" class="menu-option">
+                    বাংলা
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=ja-JP" class="menu-option">
+                    日本語
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=zh-CN" class="menu-option">
+                    简体中文
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=zh-TW" class="menu-option">
+                    繁體中文
+                </a>
+            </li>
+        
+            <li class="header-language-selector-menu-item">
+                <a href="/login/lang?lang=ko-KR" class="menu-option">
+                    한국어
+                </a>
+            </li>
+        
+    </ul>
+</span>
+
+            
+
+            
+                <a id="webapp-signup-button" class="btn header-sign-up" href="https://www.box.com/pricing" rel="noopener noreferrer">
+                    
+                    Sign Up
+                </a>
+            
+        </div>
+    </div>
+</div>
+   <div class="main-body is-narrow">   <div class="sso-login-main-body"><div class="login-sso-container">  <div class="login-customer-logo" aria-hidden="true"><img src="https://ucla.account.box.com/index.php?rm=pic_storage_auth&amp;pic=euks!pac3kv01!bC-Y-Jc_HBxl4fHhhQZoUav3K4GIWvYUeRaCQNYGywgDMus5ZZXljOUgpvDk-WTkP4E8jCY1fZOaSWEhaQenMimWlCP7OQ_eIKfYupUD961N5nGePhhsPHanTxIJQe4N45jSzteSaMFx5ptvzcGmiptZkqPTyOMNyP912XHSXcrbN78BLniHrC-a9ilGErr-uJHBMQ-vQKcmtg.." alt="" class="customer-logo-img"></div>  <h1>Sign In to Your Account</h1>   <p class="sso-description">University of California, Los Angeles uses your network credentials. Please continue to log in to Box using your network account.</p><form class="login-link-sso" method="post" action="/login"><button type="submit" class="btn btn-primary btn-full-width"> Continue</button><input type="hidden" name="redirect_url" value="https://ucla.app.box.com/public/static/4th8opserq6vu34vzgpfxbmwrsxe1dkz"><input type="hidden" name="request_token" value="692342793763dd33828b99faad331c7e970fcc9461035f4f5ced7e292d30da51"><input type="hidden" name="login_page_source" value="sso-prompt-login"></form> <div class="login-link-non-sso"> <a href="https://account.box.com/login?redirect_url=https://ucla.app.box.com/public/static/4th8opserq6vu34vzgpfxbmwrsxe1dkz" role="button" class="btn btn-full-width">   Not a part of University of California, Los Angeles</a></div></div>
+  <div class="login-custom-message">   <div class="login-custom-message-header"><span class="login-custom-message-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.0001 16.6667C13.682 16.6667 16.6667 13.6819 16.6667 10C16.6667 6.31812 13.682 3.33335 10.0001 3.33335C6.31818 3.33335 3.33341 6.31812 3.33341 10C3.33341 13.6819 6.31818 16.6667 10.0001 16.6667ZM10.0001 18.3334C14.6024 18.3334 18.3334 14.6024 18.3334 10C18.3334 5.39765 14.6024 1.66669 10.0001 1.66669C5.39771 1.66669 1.66675 5.39765 1.66675 10C1.66675 14.6024 5.39771 18.3334 10.0001 18.3334ZM8.33341 9.16669C8.33341 8.70644 8.7065 8.33335 9.16675 8.33335H9.58341C10.2737 8.33335 10.8334 8.89302 10.8334 9.58335V12.5C11.2937 12.5 11.6667 12.8731 11.6667 13.3334C11.6667 13.7936 11.2937 14.1667 10.8334 14.1667H10.4167C9.72641 14.1667 9.16675 13.607 9.16675 12.9167V10C8.7065 10 8.33341 9.62694 8.33341 9.16669ZM10.0001 7.50002C10.4603 7.50002 10.8334 7.12692 10.8334 6.66669C10.8334 6.20645 10.4603 5.83335 10.0001 5.83335C9.53983 5.83335 9.16675 6.20645 9.16675 6.66669C9.16675 7.12692 9.53983 7.50002 10.0001 7.50002Z" fill="black" fill-opacity="0.9"/></svg></span><h2>Welcome to UCLA Box</h2></div> <p>Box at UCLA is a secured cloud-based file sharing and storage service.  It is accessible from anywhere, on smartphone, tablet, or PC.  Find out more at <a href="https://www.it.ucla.edu/services/email-calendaring-collaboration/box" target="_blank">UCLA Box</a>. Users from UCLA Health Systems please visit <a href="http://uclahs.box.com" target="_blank"><strong>UCLA Health Sciences-Managed Box</strong></a> at https://uclahs.box.com instead of clicking the Continue button above. <br />
+<br />
+<strong>TERMS OF USE</strong><br />
+Using Box at UCLA means you have read, understand and agree to comply with UCLA’s Policy, Data Use Restrictions, and its Terms and Conditions.<br />
+<br />
+<br />
+<a href="https://ucla.service-now.com/support?id=its_browse_service&amp;sys_id=cb31ebb01b9c885038cec8415b4bcb9a" target="_blank">UCLA Box</a> | <a href="https://www.it.ucla.edu/it-ucla/it-policies-practices" target="_blank">Data Use Restrictions</a> | <a href="https://www.it.ucla.edu/it-ucla/it-policies-practices" target="_blank">Policy</a> | <a href="https://www.it.ucla.edu/it-ucla/it-policies-practices" target="_blank">Terms and Conditions</a>|</p></div> 
+</div>   <link rel="prefetch" href="https://cdn01.boxcdn.net/enduser/head-preflight.5c8692847d7977f0d5fa.js"> <link rel="prefetch" href="https://cdn01.boxcdn.net/enduser/runtime.2cb382be31.js"> <link rel="prefetch" href="https://cdn01.boxcdn.net/enduser/vendors~app.b74a900dd2.js"> <link rel="prefetch" href="https://cdn01.boxcdn.net/enduser/vendors~shared.d839962db5.js"> <link rel="prefetch" href="https://cdn01.boxcdn.net/enduser/vendors~observability.1a34b1ac32.js"> <link rel="prefetch" href="https://cdn01.boxcdn.net/enduser/vendors~blueprint.d2eecf38f8.js"> <link rel="prefetch" href="https://cdn01.boxcdn.net/enduser/lang-en-US.6d1ec1a703.js"> <link rel="prefetch" href="https://cdn01.boxcdn.net/enduser/app.9beea5b633.js"> <link rel="prefetch" href="https://cdn01.boxcdn.net/enduser/main.862b1ead66.js"> <link rel="prefetch" href="https://cdn01.boxcdn.net/enduser/app.a98052676a.css"> <link rel="prefetch" href="https://cdn01.boxcdn.net/enduser/vendors~blueprint.9a3bc7863a.css"> <link rel="prefetch" href="https://cdn01.boxcdn.net/enduser/main.3be5c41a64.css">   </div> 
+ <div class="main-footer"><div class="main-footer-inner"><ul role="navigation" class="footer-navigation"><li class="copyright"><a href="/about-us" > &copy;2026 Box </a></li>    <li><a href="/legal_text/privacy_policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a></li>  <li><a href="/legal_text/tos" target="_blank" rel="noopener noreferrer">Terms</a></li><li> <a href="https://community.box.com" target="_blank" rel="noopener noreferrer" id="footer_help_link">Help</a></li>     <li><a href="/integrations/googleplus/beginAuthorization?redirect_url=https%3A%2F%2Fucla.app.box.com%2Fpublic%2Fstatic%2F4th8opserq6vu34vzgpfxbmwrsxe1dkz" rel="noopener noreferrer">Sign In with Google</a></li>  </ul></div></div>
+   </div>
+
+
+
+
+    <script type="text/javascript" src="/js/vendor/intl/dist/Intl.js"></script>
+
+    <script type="text/javascript" src="/js/vendor/intl/locale-data/jsonp/en-US.js"></script>
+
+    <script type="text/javascript" src="https://cdn01.boxcdn.net/webapp_assets/login/js/login-269049bac8.min.js"></script>
+
+
+<script>
+    window.Box = window.Box || {};
+    Box.config = Box.config || {};
+    Box.config.currentRm = 'amsterdam_login_premium';
+    Box.config.requestToken = '692342793763dd33828b99faad331c7e970fcc9461035f4f5ced7e292d30da51';
+    Box.config.debug = 0;
+    Box.config.locale = 'en-US';
+
+    Box.config.isConsoleLoggingEnabled = 0;
+    Box.config.shouldUseActiveXObjectJSRef = 1;
+    Box.config.isMSEdgeSupportForBoxEditEnabled = 1;
+    Box.config.isBoxToolsEdrSupportRequired = 0;
+    Box.config.isSandbox = 0;
+
+    
+    window.onload = function() {
+        if (Box.init) return;
+        Box.Application.init(Box.config);
+    };
+    
+</script>
+<script src="data:text/javascript,Box.Application.init(Box.config);Box.init = true;" defer></script>
+</body></html>

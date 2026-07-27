@@ -76,11 +76,13 @@ class MidasImageDataset(Dataset):
         first_cut: int = 0,
         encoder_window: int = 0,
         sync_downsample_stride: int = 1,
+        image_brightness: float = 1.0,
     ):
         super().__init__()
 
         assert os.path.isdir(dataset_path), f"Dataset path does not exist: {dataset_path}"
         sync_downsample_stride = int(sync_downsample_stride)
+        image_brightness = float(image_brightness)
         if sync_downsample_stride < 1:
             raise ValueError(
                 "sync_downsample_stride must be >= 1, "
@@ -93,6 +95,7 @@ class MidasImageDataset(Dataset):
                 "first_cut": int(first_cut),
                 "encoder_window": int(encoder_window),
                 "sync_downsample_stride": sync_downsample_stride,
+                "image_brightness": image_brightness,
             }
             cache_hash = hashlib.md5(
                 json.dumps(cache_key, sort_keys=True).encode("utf-8")
@@ -113,6 +116,7 @@ class MidasImageDataset(Dataset):
                             first_cut=first_cut,
                             encoder_window=encoder_window,
                             sync_downsample_stride=sync_downsample_stride,
+                            image_brightness=image_brightness,
                             store=zarr.MemoryStore(),
                         )
                         print("[MidasImageDataset] Saving cache")
@@ -139,6 +143,7 @@ class MidasImageDataset(Dataset):
                 first_cut=first_cut,
                 encoder_window=encoder_window,
                 sync_downsample_stride=sync_downsample_stride,
+                image_brightness=image_brightness,
                 store=zarr.MemoryStore(),
             )
 
@@ -192,6 +197,7 @@ class MidasImageDataset(Dataset):
         self.first_cut = int(first_cut)
         self.encoder_window = int(encoder_window)
         self.sync_downsample_stride = sync_downsample_stride
+        self.image_brightness = image_brightness
 
         print(
             "[MidasImageDataset] Replay buffer: "
@@ -298,7 +304,38 @@ def _rolling_average(data: np.ndarray, window: int) -> np.ndarray:
     return smoothed.astype(np.float32)
 
 
-def _load_video_rgb(video_path: str, out_hw: Tuple[int, int]) -> np.ndarray:
+# Fingers used by the tactile feature, in output-column order.
+_TACTILE_FINGER_ORDER = ("thumb", "index")
+
+
+def _compute_tactile_z(tactile_npz_path: str) -> np.ndarray:
+    """
+    Reduce the full per-taxel tactile field to (mean, max) Fz per finger.
+
+    Loads the per-finger normal-force field from a processed tactile .npz
+    ({thumb: [T, 127, 3], index: [T, 52, 3]}, columns [Fx, Fy, Fz]) and returns
+    a [T, 4] feature:
+    [mean_z_thumb, max_z_thumb, mean_z_index, max_z_index].
+
+    Computed straight from the raw per-taxel normal force (no baseline
+    subtraction, no contact threshold).
+    """
+    data = np.load(tactile_npz_path)
+    feats = []
+    for finger in _TACTILE_FINGER_ORDER:
+        if finger not in data:
+            raise KeyError(
+                f"Tactile npz missing finger '{finger}': {tactile_npz_path}"
+            )
+        force_z = data[finger][:, :, 2].astype(np.float32)  # [T, N] normal force
+        feats.append(force_z.mean(axis=1))  # [T]
+        feats.append(force_z.max(axis=1))   # [T]
+    return np.stack(feats, axis=-1).astype(np.float32)  # [T, 4]
+
+
+def _load_video_rgb(
+    video_path: str, out_hw: Tuple[int, int], brightness: float = 1.0
+) -> np.ndarray:
     out_h, out_w = out_hw
     frames = []
 
@@ -313,6 +350,12 @@ def _load_video_rgb(video_path: str, out_hw: Tuple[int, int]) -> np.ndarray:
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         if frame.shape[0] != out_h or frame.shape[1] != out_w:
             frame = cv2.resize(frame, (out_w, out_h), interpolation=cv2.INTER_AREA)
+        if brightness != 1.0:
+            # Multiplicative exposure gain on the raw 8-bit frame (clipped),
+            # applied identically to every frame -- see image_brightness.
+            frame = np.clip(
+                frame.astype(np.float32) * brightness, 0.0, 255.0
+            ).astype(np.uint8)
         frames.append(frame)
 
     cap.release()
@@ -330,6 +373,7 @@ def _build_replay_buffer(
     first_cut: int,
     encoder_window: int,
     sync_downsample_stride: int,
+    image_brightness: float,
     store,
 ) -> ReplayBuffer:
     obs_shape_meta = shape_meta["obs"]
@@ -369,7 +413,7 @@ def _build_replay_buffer(
             if shape != (4,):
                 raise ValueError(
                     f"Low-dim obs '{key}' must have shape [4] "
-                    "(per-finger [mean, max] Fz for thumb/index), "
+                    "([mean_z_thumb, max_z_thumb, mean_z_index, max_z_index]), "
                     f"got {shape}"
                 )
         else:
@@ -407,7 +451,7 @@ def _build_replay_buffer(
     enc_files = _sorted_files(encoder_dir, ".npy")
     act_files = _sorted_files(action_dir, ".npy")
     sync_files = _sorted_files(sync_dir, ".npz")
-    tac_files = _sorted_files(tactile_dir, ".npy") if use_tactile else []
+    tac_files = _sorted_files(tactile_dir, ".npz") if use_tactile else []
 
     n = len(vid_files)
     if not (len(enc_files) == n and len(act_files) == n and len(sync_files) == n):
@@ -432,7 +476,11 @@ def _build_replay_buffer(
         raw_hand = np.load(enc_files[i]).astype(np.float32)
         raw_eef = np.load(act_files[i]).astype(np.float32)
         sync_data = np.load(sync_files[i])
-        raw_tactile = np.load(tac_files[i]).astype(np.float32) if use_tactile else None
+        raw_tactile = (
+            _compute_tactile_z(tac_files[i])
+            if use_tactile
+            else None
+        )
 
         if raw_hand.ndim != 2 or raw_hand.shape[1] != 13:
             raise ValueError(
@@ -446,7 +494,7 @@ def _build_replay_buffer(
             )
         if use_tactile and (raw_tactile.ndim != 2 or raw_tactile.shape[1] != 4):
             raise ValueError(
-                "MIDAS tactile file must have shape [T, 4], "
+                "MIDAS tactile feature must have shape [T, 4], "
                 f"got {raw_tactile.shape}: {tac_files[i]}"
             )
 
@@ -493,7 +541,9 @@ def _build_replay_buffer(
             continue
 
         smoothed_hand = _rolling_average(raw_hand, window=encoder_window)
-        video_frames = _load_video_rgb(vid_files[i], out_hw=(out_h, out_w))
+        video_frames = _load_video_rgb(
+            vid_files[i], out_hw=(out_h, out_w), brightness=image_brightness
+        )
 
         if len(video_frames) == 0:
             print(f"[MidasImageDataset] Dropping episode {i}: video has no frames")
