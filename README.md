@@ -54,6 +54,23 @@ python diffusion_policy/unet/train_unet_image_policy.py \
 ```
 change the device, and config accordingly. You can also override the Hydra config with specific parameters by adding more arguments (e.g. `logging.mode=online` here).
 
+For Trimi/Trimorph camera-enabled data from `trimorph-piper-control/data_collection/postprocess_dataset.py`:
+```console
+python diffusion_policy/unet/train_unet_image_policy.py \
+  --config-name=train_unet_image_trimi_hand_cond_dinov2_policy \
+  tasks.dataset.dataset_path=/absolute/path/to/data_trimorph
+```
+The Trimi configs inherit the MIDAS training settings and reuse its dataset,
+runner, and inference wrapper. Observations are RGB plus the current absolute
+13-joint hand state; targets are window-relative 6D EEF poses plus 13 joint
+deltas. The joint order and units must agree between data and inference.
+Calibrated Quest-to-Piper poses are supported as XYZ plus rotation vectors;
+for deployment, use the actual Piper start pose during postprocessing so the
+training and execution frames agree. Camera-free output needs a separate loader.
+The inherited `tasks.dataset.sync_downsample_stride=2` uses every second sync
+row; override it to match the desired control rate. The reused runner is a stub
+and does not perform robot rollouts.
+
 ### Credit
 The implementations here are not necessarily original. Please reference the original repositories (linked below) literature (cited at the bottom)!
 - [Diffusion Policy](https://github.com/real-stanford/diffusion_policy): see the `README.md` under `diffusion_policy/` for more details on the practical implementation in this repository.

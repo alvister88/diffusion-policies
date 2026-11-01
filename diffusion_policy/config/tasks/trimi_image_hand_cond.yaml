@@ -1,0 +1,27 @@
+defaults:
+  - midas_image_hand_cond
+  - _self_
+
+name: trimi_image_hand_cond
+
+image_shape: [3, 240, 320]
+shape_meta:
+  obs:
+    camera_0:
+      shape: ${tasks.image_shape}
+      type: rgb
+    hand_pose_abs:
+      shape: [13]
+      type: low_dim
+  action:
+    shape: [19]
+
+# Adding sensors also requires loading their data and supplying them at inference.
+# The reused MIDAS adapters currently support one RGB camera and 13 hand joints.
+# Reuse MIDAS loading, relative actions, normalization, and runner.
+# Hand state/targets use Trimi motor order 0..12 consistently.
+# EEF arrays contain calibrated Piper-frame XYZ + rotation vector, not Euler angles.
+# Camera-enabled postprocessing must provide frame_idx/encoder_idx/pose_idx.
+dataset:
+  dataset_path: data_trimorph
+  shape_meta: ${tasks.shape_meta}
