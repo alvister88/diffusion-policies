@@ -15,9 +15,9 @@ class MidasPolicyInference:
     """
     Lightweight MIDAS policy inference wrapper.
 
-    Input observation is RGB image plus current absolute 13D hand state. The
-    current absolute EEF pose is not used as a policy condition; it is only used
-    after sampling to convert relative EEF actions back to absolute commands.
+    Input observation is RGB, optionally plus current absolute 13D hand state
+    when included in the checkpoint's shape_meta. The current absolute EEF pose
+    is only used after sampling to convert relative actions to absolute commands.
     """
 
     def __init__(
@@ -66,7 +66,9 @@ class MidasPolicyInference:
         self._validate_shape_meta(self.shape_meta)
 
         self.rgb_key = "camera_0"
-        self.hand_pose_key = "hand_pose_abs"
+        self.hand_pose_key = (
+            "hand_pose_abs" if "hand_pose_abs" in self.shape_meta["obs"] else None
+        )
         self.expected_chw = tuple(self.shape_meta["obs"][self.rgb_key]["shape"])
         self.action_dim = int(self.shape_meta["action"]["shape"][0])
         self.num_obs_steps = int(policy.num_obs_steps)
@@ -148,8 +150,6 @@ class MidasPolicyInference:
         obs_meta = shape_meta.get("obs", {})
         if "camera_0" not in obs_meta:
             raise ValueError("shape_meta.obs must contain key 'camera_0'.")
-        if "hand_pose_abs" not in obs_meta:
-            raise ValueError("shape_meta.obs must contain key 'hand_pose_abs'.")
         if "robot_eef_pose" in obs_meta:
             raise ValueError(
                 "MIDAS inference expects no absolute EEF pose observation condition."
@@ -161,14 +161,15 @@ class MidasPolicyInference:
                 f"Expected camera_0 shape [3,H,W], got {obs_meta['camera_0'].get('shape')}."
             )
 
-        hand_meta = obs_meta["hand_pose_abs"]
-        hand_shape = tuple(hand_meta.get("shape", ()))
-        hand_type = hand_meta.get("type", "low_dim")
-        if hand_type != "low_dim" or hand_shape != (13,):
-            raise ValueError(
-                "Expected hand_pose_abs to be low_dim with shape [13], "
-                f"got type={hand_type}, shape={hand_meta.get('shape')}."
-            )
+        if "hand_pose_abs" in obs_meta:
+            hand_meta = obs_meta["hand_pose_abs"]
+            hand_shape = tuple(hand_meta.get("shape", ()))
+            hand_type = hand_meta.get("type", "low_dim")
+            if hand_type != "low_dim" or hand_shape != (13,):
+                raise ValueError(
+                    "Expected hand_pose_abs to be low_dim with shape [13], "
+                    f"got type={hand_type}, shape={hand_meta.get('shape')}."
+                )
 
         action_shape = tuple(shape_meta.get("action", {}).get("shape", ()))
         if action_shape != (19,):
@@ -189,15 +190,17 @@ class MidasPolicyInference:
         img_stack = np.stack(list(self._img_history), axis=0)
         img_stack = np.moveaxis(img_stack, -1, 1).astype(np.float32)
 
-        hand_pose = robot_state[6:].astype(np.float32)
-        if hand_pose.shape[0] != 13:
-            raise ValueError(f"Expected 13D MIDAS hand state, got {hand_pose.shape}.")
-        hand_pose_hist = np.repeat(hand_pose[None], repeats=self.num_obs_steps, axis=0)
-
         obs_np = {
             self.rgb_key: img_stack[None],
-            self.hand_pose_key: hand_pose_hist[None],
         }
+        if self.hand_pose_key is not None:
+            hand_pose = robot_state[6:].astype(np.float32)
+            if hand_pose.shape[0] != 13:
+                raise ValueError(f"Expected 13D MIDAS hand state, got {hand_pose.shape}.")
+            hand_pose_hist = np.repeat(
+                hand_pose[None], repeats=self.num_obs_steps, axis=0
+            )
+            obs_np[self.hand_pose_key] = hand_pose_hist[None]
 
         return {
             key: torch.from_numpy(value).to(self.device, non_blocking=True)

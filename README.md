@@ -61,9 +61,13 @@ python diffusion_policy/unet/train_unet_image_policy.py \
   tasks.dataset.dataset_path=/absolute/path/to/data_trimorph
 ```
 The Trimi configs inherit the MIDAS training settings and reuse its dataset,
-runner, and inference wrapper. Observations are RGB plus the current absolute
-13-joint hand state; targets are window-relative 6D EEF poses plus 13 joint
-deltas. The joint order and units must agree between data and inference.
+runner, and inference wrapper. Observations are defined in
+`diffusion_policy/config/tasks/trimi_image_hand_cond.yaml`: comment out
+`hand_pose_abs` and its fields for RGB-only conditioning, or uncomment them to
+include the current absolute 13-joint hand state. Targets remain window-relative
+6D EEF poses plus 13 joint deltas. Inference still needs the current EEF and hand
+state to convert relative predictions to absolute commands. The joint order and
+units must agree between data and inference.
 Calibrated Quest-to-Piper poses are supported as XYZ plus rotation vectors;
 for deployment, use the actual Piper start pose during postprocessing so the
 training and execution frames agree. Camera-free output needs a separate loader.

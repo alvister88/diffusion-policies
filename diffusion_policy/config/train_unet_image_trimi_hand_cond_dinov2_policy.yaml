@@ -4,7 +4,11 @@ defaults:
   - _self_
 
 name: train_diffusion_trimi_image_hand_cond_dinov2_${num_inference_steps}
-exp_name: "trimi_hand_cond_dinov2"
+exp_name: "trimi_hand_cond_dinov2_JUN"
+
+logging:
+  project: trimi_training
+  mode: online
 
 device: "cuda:0"
 
