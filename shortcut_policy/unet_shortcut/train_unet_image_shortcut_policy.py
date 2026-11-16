@@ -21,6 +21,7 @@ import wandb
 import tqdm
 import numpy as np
 import time
+import math
 import matplotlib
 
 matplotlib.use("Agg")  # Non-GUI backend
@@ -51,7 +52,7 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 
 
 class TrainDiffusionUnetImageWorkspace:
-    include_keys = ("global_step", "epoch")
+    include_keys = ("global_step", "epoch", "optimizer_step")
     exclude_keys = ()
 
     def __init__(self, cfg: OmegaConf, output_dir: Optional[str] = None):
@@ -80,10 +81,13 @@ class TrainDiffusionUnetImageWorkspace:
 
         # Initialize training state
         self.global_step = 0
+        self.optimizer_step = 0
         self.epoch = 0
 
         # Shortcut steps we want to test
-        self.num_shortcut_steps = [1, 2, 4, 8, 16, 32, 64, 128]
+        self.num_shortcut_steps = [
+            2 ** i for i in range(int(math.log2(self.model.max_train_steps)) + 1)
+        ]
 
         # For logging speed vs. MSE
         self.training_steps: List[int] = []
@@ -327,20 +331,35 @@ class TrainDiffusionUnetImageWorkspace:
         if self.ema_model is not None:
             self.ema_model.set_normalizer(normalizer)
 
+        # Debug adjustments must precede scheduler construction.
+        if cfg.training.debug:
+            cfg.training.num_epochs = 2
+            cfg.training.max_train_steps = 3
+            cfg.training.max_val_steps = 3
+            cfg.training.rollout_every = 1
+            cfg.training.checkpoint_every = 1
+            cfg.training.val_every = 1
+            cfg.training.sample_every = 1
+
+        train_batches = min(
+            len(train_dataloader), cfg.training.max_train_steps or len(train_dataloader)
+        )
+        accumulation = cfg.training.gradient_accumulate_every
+        updates_per_epoch = math.ceil(train_batches / accumulation)
         # LR Scheduler
         lr_scheduler = get_scheduler(
             cfg.training.lr_scheduler,
             optimizer=self.optimizer,
             num_warmup_steps=cfg.training.lr_warmup_steps,
-            num_training_steps=(len(train_dataloader) * cfg.training.num_epochs)
-            // cfg.training.gradient_accumulate_every,
-            last_epoch=self.global_step - 1,
+            num_training_steps=updates_per_epoch * cfg.training.num_epochs,
+            last_epoch=self.optimizer_step - 1,
         )
 
         # EMA
         ema: Optional[EMAModel] = None
         if cfg.training.use_ema:
             ema = hydra.utils.instantiate(cfg.ema, model=self.ema_model)
+            ema.optimization_step = self.optimizer_step
 
         # Env runner
         env_runner = hydra.utils.instantiate(
@@ -369,16 +388,6 @@ class TrainDiffusionUnetImageWorkspace:
 
         train_sampling_batch = None
 
-        # Debug adjustments
-        if cfg.training.debug:
-            cfg.training.num_epochs = 2
-            cfg.training.max_train_steps = 3
-            cfg.training.max_val_steps = 3
-            cfg.training.rollout_every = 1
-            cfg.training.checkpoint_every = 1
-            cfg.training.val_every = 1
-            cfg.training.sample_every = 1
-
         log_path = os.path.join(self.output_dir, "logs.json.txt")
         with JsonLogger(log_path) as json_logger:
             for local_epoch_idx in range(cfg.training.num_epochs):
@@ -387,6 +396,8 @@ class TrainDiffusionUnetImageWorkspace:
                 # ---------------------------
                 # 1) TRAIN
                 # ---------------------------
+                self.model.train()
+                self.optimizer.zero_grad()
                 if cfg.training.freeze_encoder:
                     self.model.obs_encoder.eval()
                     self.model.obs_encoder.requires_grad_(False)
@@ -406,18 +417,20 @@ class TrainDiffusionUnetImageWorkspace:
                             train_sampling_batch = batch
 
                         raw_loss = self.model.compute_loss(batch)
-                        loss = raw_loss / cfg.training.gradient_accumulate_every
+                        # The final accumulation group may contain fewer batches.
+                        group_start = (batch_idx // accumulation) * accumulation
+                        group_size = min(accumulation, train_batches - group_start)
+                        loss = raw_loss / group_size
                         loss.backward()
 
-                        if (
-                            self.global_step % cfg.training.gradient_accumulate_every
-                        ) == 0:
+                        if (batch_idx + 1) % accumulation == 0 or batch_idx + 1 == train_batches:
                             self.optimizer.step()
                             self.optimizer.zero_grad()
                             lr_scheduler.step()
+                            self.optimizer_step += 1
 
-                        if cfg.training.use_ema and ema is not None:
-                            ema.step(self.model)
+                            if cfg.training.use_ema and ema is not None:
+                                ema.step(self.model)
 
                         raw_loss_cpu = raw_loss.item()
                         tepoch.set_postfix(loss=raw_loss_cpu, refresh=False)
@@ -448,6 +461,7 @@ class TrainDiffusionUnetImageWorkspace:
                 # 2) EVAL (Rollout & Coverage)
                 # ---------------------------
                 policy = self.model if not cfg.training.use_ema else self.ema_model
+                self.model.eval()
                 policy.eval()
 
                 # Possibly rollout
@@ -508,7 +522,7 @@ class TrainDiffusionUnetImageWorkspace:
                                 ):
                                     break
                         if len(val_losses) > 0:
-                            val_loss = torch.mean(torch.tensor(val_losses)).item()
+                            val_loss = torch.stack(val_losses).mean().item()
                             step_log["val_loss"] = val_loss
 
                 # ---------------------------
@@ -530,10 +544,15 @@ class TrainDiffusionUnetImageWorkspace:
                         step_log["train_action_mse_error"] = mse_val.item()
 
                         # Speed & MSE
-                        for s in self.num_shortcut_steps:
-                            t0 = time.time()
+                        test_steps = self.num_shortcut_steps if cfg.training.get("do_shortcut_speed_test", False) else []
+                        for s in test_steps:
+                            if device.type == "cuda":
+                                torch.cuda.synchronize(device)
+                            t0 = time.perf_counter()
                             result_n = policy.predict_action_shortcut(obs_dict, s)
-                            t1 = time.time()
+                            if device.type == "cuda":
+                                torch.cuda.synchronize(device)
+                            t1 = time.perf_counter()
 
                             pred_n = result_n["action_pred"]
                             mse_n = torch.nn.functional.mse_loss(pred_n, gt_action)
@@ -541,9 +560,10 @@ class TrainDiffusionUnetImageWorkspace:
                             self.time_data[f"Time_{s}"].append(t1 - t0)
                             self.mse_data[f"MSE_{s}"].append(mse_n.item())
 
-                        self.training_steps.append(self.global_step)
-                        if (self.global_step % self.plot_log_interval) == 0:
-                            self.update_plot()
+                        if test_steps:
+                            self.training_steps.append(self.global_step)
+                            if (self.global_step % self.plot_log_interval) == 0:
+                                self.update_plot()
 
                         del batch, obs_dict, gt_action, result, pred_action, mse_val
 
@@ -562,7 +582,7 @@ class TrainDiffusionUnetImageWorkspace:
                         self.save_checkpoint(path=topk_ckpt_path)
 
                 # Return to train mode
-                policy.train()
+                self.model.train()
 
                 # Log final step metrics
                 wandb_run.log(step_log, step=self.global_step)
@@ -605,11 +625,11 @@ class TrainDiffusionUnetImageWorkspace:
 
         if use_thread:
             self._saving_thread = threading.Thread(
-                target=lambda: torch.save(payload, path.open("wb"), pickle_module=dill)
+                target=lambda: torch.save(payload, path, pickle_module=dill)
             )
             self._saving_thread.start()
         else:
-            torch.save(payload, path.open("wb"), pickle_module=dill)
+            torch.save(payload, path, pickle_module=dill)
         return str(path.absolute())
 
     def get_checkpoint_path(self, tag="latest"):
@@ -640,7 +660,7 @@ class TrainDiffusionUnetImageWorkspace:
             path = self.get_checkpoint_path(tag=tag)
         else:
             path = pathlib.Path(path)
-        payload = torch.load(path.open("rb"), pickle_module=dill, **kwargs)
+        payload = torch.load(path, pickle_module=dill, **kwargs)
         self.load_payload(payload, exclude_keys=exclude_keys, include_keys=include_keys)
         return payload
 

@@ -1,32 +1,20 @@
+from typing import Dict, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from typing import Dict, Tuple
-
 from shared.models.common.normalizer import LinearNormalizer
+from shared.models.components.positional_embedding import SinusoidalPosEmb
 from shared.models.unet.conditional_unet1d import ConditionalUnet1D
-from shared.models.common.mask_generator import LowdimMaskGenerator
 from shared.vision.common.multi_image_obs_encoder import ObsEncoder
 from shared.utils.pytorch_util import dict_apply
 from shortcut_policy.shortcut_model import ShortcutModel
 
-"""
-Selected Dimension Keys:
-
-B: batch size
-T: prediction horizon
-    To: observation horizon
-    Ta: action horizon
-F: feature dimension
-    Fo: observation feature dimension
-    Fa: action feature dimension
-G: global conditioning dimension
-L: local conditioning dimension
-"""
-
 
 class UnetImageShortcutPolicy(nn.Module):
+    """Observation-conditioned trajectory flow with optional shortcut training."""
+
     def __init__(
         self,
         shape_meta: dict,
@@ -41,39 +29,40 @@ class UnetImageShortcutPolicy(nn.Module):
         kernel_size: int = 5,
         num_groups: int = 8,
         film_modulation_scale: bool = True,
+        max_train_steps: int = 128,
+        shortcut_fraction: float = 0.25,
         **kwargs,
     ):
         super().__init__()
+        if not global_obs_cond:
+            raise NotImplementedError("Shortcut policy supports global_obs_cond=True only")
+        if not 0 <= shortcut_fraction < 1:
+            raise ValueError("shortcut_fraction must be in [0, 1)")
+        if (not 1 <= num_obs_steps <= horizon
+                or not 1 <= num_action_steps <= horizon - num_obs_steps + 1):
+            raise ValueError("Observation and executed action horizons must fit horizon")
+        if horizon % (2 ** (len(down_dims) - 1)):
+            raise ValueError("horizon must be divisible by the U-Net downsampling factor")
 
         action_dim_Fa = shape_meta["action"]["shape"][0]
         obs_feat_dim_Fo = obs_encoder.output_shape()[0]
-
-        inp_dim_F = action_dim_Fa + obs_feat_dim_Fo
-        cond_dim_G = None
-        if global_obs_cond:
-            inp_dim_F = action_dim_Fa  # F := Fa
-            cond_dim_G = obs_feat_dim_Fo * num_obs_steps
-
-        model = ConditionalUnet1D(
-            inp_dim_F=inp_dim_F,
+        self.distance_encoder = nn.Sequential(
+            SinusoidalPosEmb(embed_dim_D),
+            nn.Linear(embed_dim_D, embed_dim_D * 4),
+            nn.Mish(),
+            nn.Linear(embed_dim_D * 4, embed_dim_D),
+        )
+        self.model = ConditionalUnet1D(
+            inp_dim_F=action_dim_Fa,
             cond_dim_L=None,
-            cond_dim_G=cond_dim_G,
+            cond_dim_G=obs_feat_dim_Fo * num_obs_steps + embed_dim_D,
             embed_dim_D=embed_dim_D,
             down_dims=down_dims,
             kernel_size=kernel_size,
             num_groups=num_groups,
             film_modulation_scale=film_modulation_scale,
         )
-
         self.obs_encoder = obs_encoder
-        self.model = model
-        self.mask_generator = LowdimMaskGenerator(
-            action_dim_Fa=action_dim_Fa,
-            obs_feat_dim_Fo=0 if global_obs_cond else obs_feat_dim_Fo,
-            max_num_obs_steps=num_obs_steps,
-            fix_obs_steps=True,
-            action_visible=False,
-        )
         self.normalizer = LinearNormalizer()
         self.horizon = horizon
         self.obs_feat_dim_Fo = obs_feat_dim_Fo
@@ -82,169 +71,91 @@ class UnetImageShortcutPolicy(nn.Module):
         self.num_obs_steps = num_obs_steps
         self.num_inference_steps = num_inference_steps
         self.global_obs_cond = global_obs_cond
-
-        # The ShortcutModel wrapper
+        self.max_train_steps = max_train_steps
+        self.shortcut_fraction = shortcut_fraction
         self.shortcut_model = ShortcutModel(
-            self.forward_model,
-            num_inference_steps=num_inference_steps,
-            device=self.device,
+            self.forward_model, num_inference_steps=num_inference_steps,
+            max_train_steps=max_train_steps,
         )
-        self.kwargs = kwargs
 
     def forward_model(self, z, t, distance=None, cond_BTL=None, cond_BG=None):
-        t.to(self.device)
-        out = self.model(
-            sample_BTF=z,
-            timesteps_B=t,
-            cond_BTL=cond_BTL,
-            cond_BG=cond_BG,
+        t = torch.as_tensor(t, device=z.device, dtype=z.dtype).reshape(-1).expand(z.shape[0])
+        distance = torch.as_tensor(
+            0.0 if distance is None else distance, device=z.device, dtype=z.dtype
+        ).reshape(-1).expand(z.shape[0])
+        # Scale continuous [0,1] inputs to a useful sinusoidal frequency range.
+        distance_feat = self.distance_encoder(distance * self.max_train_steps)
+        cond = torch.cat([cond_BG, distance_feat], dim=-1)
+        return self.model(
+            sample_BTF=z, timesteps_B=t * self.max_train_steps,
+            cond_BTL=cond_BTL, cond_BG=cond,
         )
-        return out
 
     def reset(self):
         pass
 
     @property
     def device(self):
-        return next(iter(self.parameters())).device
+        return next(self.parameters()).device
 
     @property
     def dtype(self):
-        return next(iter(self.parameters())).dtype
+        return next(self.parameters()).dtype
 
-    # ========= INFERENCE =========
-    def predict_action(self, obs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-        """
-        Default inference: for example, 2-step approach.
-        You may keep or revert. We'll do 2-step here by default.
-        """
-        normalizer = self.normalizer
-        obs_encoder = self.obs_encoder
-        global_obs_cond = self.global_obs_cond
-        device = self.device
-        dtype = self.dtype
-        T = self.horizon
-        Ta = self.num_action_steps
-        To = self.num_obs_steps
-        Fa = self.action_dim_Fa
-        B = obs["image"].shape[0]
-
-        # Normalize obs
-        normalized_obs = normalizer.normalize(obs)
-
-        cond_BG = None
-        if global_obs_cond:
-            flat_normalized_obs = dict_apply(
-                normalized_obs, lambda x: x[:, :To, ...].reshape(-1, *x.shape[2:])
-            )
-            normalized_obs_feats = obs_encoder(flat_normalized_obs)
-            cond_BG = normalized_obs_feats.reshape(B, -1)
-        else:
-            print("Error, local obs conditioning not implemented for now!")
-
-        # z0 is random noise in [ B, T, Fa ]
-        z0 = torch.randn(size=(B, T, Fa), dtype=dtype, device=device)
-
-        # 2-step approach
-        traj = self.shortcut_model.sample_2step_shortcut(z0=z0, cond_BG=cond_BG)
-        action_pred_BTFa = traj[-1]
-        action_pred_BTFa = normalizer["action"].unnormalize(action_pred_BTFa)
-
-        # Slice out the final portion for the actual actions
-        obs_act_horizon = To + Ta - 1
-        action_BTaFa = action_pred_BTFa[:, obs_act_horizon - Ta : obs_act_horizon]
-
-        result = {"action": action_BTaFa, "action_pred": action_pred_BTFa}
-        return result
-
-    # --- CHANGED HERE: new method to do custom # of Euler steps
-    def predict_action_shortcut(
-        self, obs: Dict[str, torch.Tensor], num_inference_steps: int = None
-    ):
-        """
-        Inference for a user-specified # of Euler steps.
-        This calls sample_ode_shortcut(..., num_inference_steps=N).
-        """
-        num_inference_steps = num_inference_steps or self.num_inference_steps
-        normalizer = self.normalizer
-        obs_encoder = self.obs_encoder
-        global_obs_cond = self.global_obs_cond
-        device = self.device
-        dtype = self.dtype
-        T = self.horizon
-        Ta = self.num_action_steps
-        To = self.num_obs_steps
-        B = obs["image"].shape[0]
-
-        normalized_obs = normalizer.normalize(obs)
-        cond_BG = None
-        if global_obs_cond:
-            flat_normalized_obs = dict_apply(
-                normalized_obs, lambda x: x[:, :To, ...].reshape(-1, *x.shape[2:])
-            )
-            normalized_obs_feats = obs_encoder(flat_normalized_obs)
-            cond_BG = normalized_obs_feats.reshape(B, -1)
-
-        z0 = torch.randn(size=(B, T, self.action_dim_Fa), dtype=dtype, device=device)
-
-        # Now do num_inference_steps Euler steps
-        traj = self.shortcut_model.sample_ode_shortcut(
-            z0=z0, num_inference_steps=num_inference_steps, cond_BG=cond_BG
+    def _encode_obs(self, obs):
+        normalized_obs = self.normalizer.normalize(obs)
+        batch_size = next(iter(normalized_obs.values())).shape[0]
+        if any(x.shape[1] < self.num_obs_steps for x in normalized_obs.values()):
+            raise ValueError("Insufficient observation history")
+        flattened = dict_apply(
+            normalized_obs,
+            lambda x: x[:, :self.num_obs_steps].reshape(-1, *x.shape[2:]),
         )
-        action_pred_BTFa = traj[-1]
-        action_pred_BTFa = normalizer["action"].unnormalize(action_pred_BTFa)
+        return self.obs_encoder(flattened).reshape(batch_size, -1)
 
-        obs_act_horizon = To + Ta - 1
-        action_BTaFa = action_pred_BTFa[:, obs_act_horizon - Ta : obs_act_horizon]
+    @torch.no_grad()
+    def predict_action(self, obs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        return self.predict_action_shortcut(obs)
 
-        result = {"action": action_BTaFa, "action_pred": action_pred_BTFa}
-        return result
+    @torch.no_grad()
+    def predict_action_shortcut(self, obs, num_inference_steps=None):
+        steps = self.num_inference_steps if num_inference_steps is None else num_inference_steps
+        cond_BG = self._encode_obs(obs)
+        z0 = torch.randn(
+            (cond_BG.shape[0], self.horizon, self.action_dim_Fa),
+            dtype=self.dtype, device=self.device,
+        )
+        trajectory = self.shortcut_model.sample_ode_shortcut(
+            z0=z0, num_inference_steps=steps, cond_BG=cond_BG,
+            flow_only=self.shortcut_fraction == 0,
+        )
+        action_pred = self.normalizer["action"].unnormalize(trajectory[-1])
+        start = self.num_obs_steps - 1
+        return {"action": action_pred[:, start:start + self.num_action_steps],
+                "action_pred": action_pred}
 
-    # ========= TRAINING =========
     def set_normalizer(self, normalizer: LinearNormalizer):
         self.normalizer.load_state_dict(normalizer.state_dict())
 
     def compute_loss(self, batch):
-        """
-        Shortcut training approach:
-          1) Flow-matching pass (get_train_tuple)
-          2) Shortcut pass (get_shortcut_train_tuple)
-          => sum of MSE losses
-        """
-        normalizer = self.normalizer
-        obs_encoder = self.obs_encoder
-        global_obs_cond = self.global_obs_cond
-        To = self.num_obs_steps
-        batch["action"].shape[1]
-        B = batch["action"].shape[0]
-
-        # 1) Normalize data
-        normalized_obs = normalizer.normalize(batch["obs"])
-        normalized_acts = normalizer["action"].normalize(batch["action"])
-
-        cond_BG = None
-        if global_obs_cond:
-            flat_normalized_obs = dict_apply(
-                normalized_obs, lambda x: x[:, :To, ...].reshape(-1, *x.shape[2:])
+        cond_BG = self._encode_obs(batch["obs"])
+        z1 = self.normalizer["action"].normalize(batch["action"])
+        batch_size = z1.shape[0]
+        # Keep a flow-matching anchor even for very small batches. B=1 uses FM.
+        num_shortcut = 0
+        if self.shortcut_fraction:
+            num_shortcut = min(
+                batch_size - 1, max(1, int(batch_size * self.shortcut_fraction))
             )
-            normalized_obs_feats = obs_encoder(flat_normalized_obs)
-            cond_BG = normalized_obs_feats.reshape(B, -1)
-
-        # 2) Our ground truth is z1
-        z1 = normalized_acts
+        num_flow = batch_size - num_shortcut
         z0 = torch.randn_like(z1)
-
-        # --- (A) Flow-matching pass
-        z_t, t, target, distance = self.shortcut_model.get_train_tuple(z0=z0, z1=z1)
-        pred = self.shortcut_model.model(z_t, t, distance=distance, cond_BG=cond_BG)
-        loss_flow = F.mse_loss(pred, target)
-
-        # --- (B) Shortcut pass
-        z_t2, t2, target2, distance2 = self.shortcut_model.get_shortcut_train_tuple(
-            z0=torch.randn_like(z1), z1=z1, cond_BG=cond_BG
-        )
-        pred2 = self.shortcut_model.model(z_t2, t2, distance=distance2, cond_BG=cond_BG)
-        loss_shortcut = F.mse_loss(pred2, target2)
-
-        loss = loss_flow + loss_shortcut
-        return loss
+        flow = self.shortcut_model.get_train_tuple(z0[:num_flow], z1[:num_flow])
+        if num_shortcut:
+            shortcut = self.shortcut_model.get_shortcut_train_tuple(
+                z0[num_flow:], z1[num_flow:], cond_BG=cond_BG[num_flow:].detach(),
+            )
+            z_t, t, target, distance = [torch.cat(parts) for parts in zip(flow, shortcut)]
+        else:
+            z_t, t, target, distance = flow
+        prediction = self.forward_model(z_t, t, distance=distance, cond_BG=cond_BG)
+        return F.mse_loss(prediction, target)
