@@ -75,6 +75,10 @@ The inherited `tasks.dataset.sync_downsample_stride=2` uses every second sync
 row; override it to match the desired control rate. The reused runner is a stub
 and does not perform robot rollouts.
 
+For flow matching and shortcut training with the same Trimi DINOv2 settings,
+see [the shortcut policy guide](shortcut_policy/README.md), including the
+architecture, corrected objective, training commands, and regression checks.
+
 ### Credit
 The implementations here are not necessarily original. Please reference the original repositories (linked below) literature (cited at the bottom)!
 - [Diffusion Policy](https://github.com/real-stanford/diffusion_policy): see the `README.md` under `diffusion_policy/` for more details on the practical implementation in this repository.
