@@ -171,13 +171,16 @@ class ShortcutTests(unittest.TestCase):
         result = ema.predict_action({k: v.double() for k, v in make_batch(1)['obs'].items()})
         self.assertEqual(result['action'].dtype, torch.float64)
 
-    def test_config_matches_diffusion_reference(self):
+    def test_config_training_matches_diffusion_reference(self):
         root = Path(__file__).resolve().parents[1]
         OmegaConf.register_new_resolver('eval', eval, replace=True)
         with initialize_config_dir(version_base=None, config_dir=str(root/'diffusion_policy/config')):
             reference = compose(config_name='train_unet_image_trimi_hand_cond_dinov2_policy')
         with initialize_config_dir(version_base=None, config_dir=str(root/'shortcut_policy/config')):
             shortcut = compose(config_name='train_unet_image_trimi_hand_cond_dinov2_shortcut_policy')
+        # The independent tasks may select different sensors/data paths. Compare
+        # training settings with the same task rather than coupling those choices.
+        reference.tasks = copy.deepcopy(shortcut.tasks)
         # Compose API does not install Hydra's runtime output-dir context.
         reference.tasks.env_runner.output_dir = '/tmp/test'
         shortcut.tasks.env_runner.output_dir = '/tmp/test'

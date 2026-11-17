@@ -78,6 +78,9 @@ and does not perform robot rollouts.
 For flow matching and shortcut training with the same Trimi DINOv2 settings,
 see [the shortcut policy guide](shortcut_policy/README.md), including the
 architecture, corrected objective, training commands, and regression checks.
+The guide also covers the shared DINOv3 backbone and the shortcut-only
+[DINOv3 fine-tuning config](shortcut_policy/config/train_unet_image_trimi_hand_cond_dinov3_shortcut_policy.yaml),
+with configurable pretrained weights and a trainable encoder.
 
 ### Credit
 The implementations here are not necessarily original. Please reference the original repositories (linked below) literature (cited at the bottom)!

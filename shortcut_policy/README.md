@@ -150,6 +150,52 @@ The optional multi-budget timing/MSE benchmark is disabled by default; enable
 it with `training.do_shortcut_speed_test=true`. Its MSE samples fresh noise at
 each budget, and its timings include observation encoding and action conversion.
 
+## DINOv3 fine-tuning
+
+`shared.vision.dinov3.model_getter.get_dinov3` loads Meta's ViT backbones and
+returns CLS or mean patch features with gradients preserved. The shortcut-only
+`train_unet_image_trimi_hand_cond_dinov3_shortcut_policy.yaml` explicitly defines
+the training settings and uses the same local Trimi task. Its default backbone
+is ViT-S/16 with 384 features and a 224x224 crop.
+
+Use a modern Python/PyTorch environment rather than the legacy Python 3.9 /
+PyTorch 1.12 environment in `environment.yaml`. Install the training dependencies
+plus the data/evaluation dependencies imported by Meta's current Hub entry point:
+
+```bash
+pip install -r requirements-dinov3.txt
+```
+
+Obtain authorized pretrained weights through the
+[official DINOv3 repository](https://github.com/facebookresearch/dinov3#pretrained-models).
+Set the checkpoint path or URL in
+`policy.obs_encoder.vision_backbone.weights`, through `DINOV3_WEIGHTS`, or directly
+on the command line:
+
+```bash
+python shortcut_policy/unet_shortcut/train_unet_image_shortcut_policy.py \
+  --config-name=train_unet_image_trimi_hand_cond_dinov3_shortcut_policy \
+  tasks.dataset.dataset_path=/absolute/path/to/data_trimorph \
+  policy.obs_encoder.vision_backbone.weights=/absolute/path/to/dinov3_vits16_weights.pth
+```
+
+The config sets `policy.obs_encoder.vision_backbone.trainable=True` and
+`training.freeze_encoder=False`. Pretrained backbone parameters are included in
+the policy optimizer and updated by the policy loss. The feature extractor
+does not detach outputs or disable gradients. The no-gradient shortcut teacher
+calls do not prevent gradients through the student observation features.
+
+`weights` selects initialization, while `trainable` controls backbone gradients.
+Missing weights with `pretrained=True` produce a clear error; random initialization
+requires explicitly setting `policy.obs_encoder.vision_backbone.pretrained=False`.
+For a local DINOv3 checkout, additionally set
+`policy.obs_encoder.vision_backbone.source=local` and
+`policy.obs_encoder.vision_backbone.repo=/absolute/path/to/dinov3`.
+The GitHub repo setting also accepts a `:ref` suffix to pin the upstream version.
+
+Train a new policy when switching from DINOv2 to DINOv3; equal feature dimensions
+do not make the learned feature representations interchangeable.
+
 ## Correctness fixes and verification
 
 The previous implementation dropped `distance` before the network, generated
