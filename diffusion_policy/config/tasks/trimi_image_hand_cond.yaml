@@ -26,7 +26,7 @@ env_runner:
 
 dataset:
   _target_: shared.env.midas.midas_image_dataset.MidasImageDataset
-  dataset_path: data/data_trimorph_hand_mocap_quest_5
+  dataset_path: data/data_trimorph_unscrew_cap_0
   shape_meta: ${tasks.shape_meta}
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1'}

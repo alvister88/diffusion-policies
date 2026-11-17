@@ -57,20 +57,22 @@ comparison with shortcut training.
 
 ## Architecture for Trimi
 
-With the supplied Trimi config:
+With the supplied RGB-only Trimi config:
 
-1. Observations are `camera_0: [B,1,3,240,320]` and
-   `hand_pose_abs: [B,1,13]`. The dataset normalizer transforms both.
+1. Observations are `camera_0: [B,1,3,240,320]`. Uncommenting
+   `hand_pose_abs` in the task config optionally adds `[B,1,13]` joint-state
+   observations; the dataset and normalizer derive their fields from that schema.
 2. Images resize to 240x240, crop to 224x224, receive color jitter, and use
    ImageNet normalization, matching the diffusion reference config.
-   DINOv2 ViT-S/14 produces a 384-dimensional CLS vector. The observation
-   encoder concatenates the normalized 13-joint hand state, giving 397 features.
+   DINOv2 ViT-S/14 produces a 384-dimensional CLS vector. With optional hand
+   conditioning enabled, the observation encoder concatenates the normalized
+   13-joint state, giving 397 features; RGB-only conditioning remains 384-dimensional.
    Observation histories are flattened into global conditioning; here `To=1`.
 3. An independent sinusoidal embedding + MLP encodes step size in 128 dimensions.
    Flow time has its own 128-dimensional embedding inside the U-Net. Both
    continuous inputs are scaled by 128 before sinusoidal encoding. Together
-   with the observation features, these form 653 conditioning features used
-   by the residual blocks' FiLM scale and bias layers.
+   with the observation features, these form 640 RGB-only conditioning features
+   (653 with hand state) used by the residual blocks' FiLM scale and bias layers.
 4. A temporal 1D U-Net takes `[B,16,19]` interpolated action chunks. Its channel
    widths are `[256,512,1024]`, kernel size 5, with GroupNorm, Mish activations,
    residual blocks, and skip connections. The temporal resolutions are
@@ -127,6 +129,10 @@ python shortcut_policy/unet_shortcut/train_unet_image_shortcut_policy.py \
   tasks.dataset.dataset_path=/absolute/path/to/data_trimorph \
   policy.shortcut_fraction=0 exp_name=trimi_hand_cond_dinov2_flow
 ```
+
+This command also supports the RGB-only task schema shown above. No
+`hand_pose_abs` tensor or normalizer entry is required when that field is
+commented out.
 
 Useful overrides include `num_inference_steps=4`,
 `dataloader.batch_size=64 val_dataloader.batch_size=64`,

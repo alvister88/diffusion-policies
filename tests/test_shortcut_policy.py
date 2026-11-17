@@ -26,16 +26,34 @@ class ToyEncoder(nn.Module):
         return torch.cat([self.proj(obs['camera_0'].mean((-2, -1))), obs['hand_pose_abs']], -1)
 
 
-def make_policy(shortcut_fraction=0.25):
+class ImageOnlyToyEncoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.proj = nn.Linear(3, 4)
+
+    def output_shape(self):
+        return (4,)
+
+    def forward(self, obs):
+        return self.proj(obs['camera_0'].mean((-2, -1)))
+
+
+def make_policy(shortcut_fraction=0.25, image_only=False):
+    obs_encoder = ImageOnlyToyEncoder() if image_only else ToyEncoder()
     policy = UnetImageShortcutPolicy(
-        shape_meta={'action': {'shape': [3]}}, obs_encoder=ToyEncoder(),
+        shape_meta={'action': {'shape': [3]}}, obs_encoder=obs_encoder,
         horizon=8, num_action_steps=4, num_obs_steps=1, num_inference_steps=4,
         embed_dim_D=8, down_dims=(8, 16), kernel_size=3, num_groups=8,
         shortcut_fraction=shortcut_fraction,
     )
     normalizer = LinearNormalizer()
-    normalizer.fit({'camera_0': torch.rand(8, 3, 4, 4),
-                    'hand_pose_abs': torch.randn(8, 2), 'action': torch.randn(8, 3)})
+    normalizer_data = {
+        'camera_0': torch.rand(8, 3, 4, 4),
+        'action': torch.randn(8, 3),
+    }
+    if not image_only:
+        normalizer_data['hand_pose_abs'] = torch.randn(8, 2)
+    normalizer.fit(normalizer_data)
     policy.set_normalizer(normalizer)
     return policy
 
@@ -162,6 +180,25 @@ class ShortcutTests(unittest.TestCase):
         self.assertTrue(torch.isfinite(policy.compute_loss(make_batch(4))))
         policy.predict_action_shortcut(obs, 3)
 
+    def test_rgb_only_flow_matching_trains_without_hand_pose(self):
+        policy = make_policy(shortcut_fraction=0, image_only=True)
+        batch = {
+            'obs': {'camera_0': torch.rand(4, 1, 3, 4, 4)},
+            'action': torch.randn(4, 8, 3),
+        }
+
+        loss = policy.compute_loss(batch)
+        self.assertTrue(torch.isfinite(loss))
+        loss.backward()
+        self.assertTrue(any(
+            parameter.grad is not None and parameter.grad.abs().sum() > 0
+            for parameter in policy.obs_encoder.parameters()
+        ))
+
+        result = policy.eval().predict_action(batch['obs'])
+        self.assertEqual(result['action'].shape, (4, 4, 3))
+        self.assertEqual(result['action_pred'].shape, (4, 8, 3))
+
     def test_deepcopy_wrapper_uses_copied_policy(self):
         policy = make_policy()
         ema = copy.deepcopy(policy)
@@ -198,6 +235,7 @@ class ShortcutTests(unittest.TestCase):
         self.assertNotIn('searchpath', primary.hydra)
         task = OmegaConf.load(root/'shortcut_policy/config/tasks/trimi_image_hand_cond.yaml')
         self.assertNotIn('defaults', task)
+        self.assertNotIn('hand_pose_abs', task.shape_meta.obs)
 
     def test_workspace_training_validation_and_accumulation(self):
         from shortcut_policy.unet_shortcut.train_unet_image_shortcut_policy import TrainDiffusionUnetImageWorkspace

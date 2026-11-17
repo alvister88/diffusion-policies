@@ -6,9 +6,9 @@ shape_meta:
     camera_0:
       shape: ${tasks.image_shape}
       type: rgb
-    hand_pose_abs:
-      shape: [13]
-      type: low_dim
+    # hand_pose_abs:
+    #   shape: [13]
+    #   type: low_dim
   action:
     shape: [19]
 
@@ -24,7 +24,7 @@ env_runner:
 
 dataset:
   _target_: shared.env.midas.midas_image_dataset.MidasImageDataset
-  dataset_path: data_trimorph
+  dataset_path: data/data_trimorph_cube_pick_place_new_hw
   shape_meta: ${tasks.shape_meta}
   horizon: ${horizon}
   pad_before: ${eval:'${num_obs_steps}-1'}
