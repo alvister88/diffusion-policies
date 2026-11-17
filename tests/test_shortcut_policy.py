@@ -127,12 +127,60 @@ class ShortcutTests(unittest.TestCase):
         wrapper.sample_ode_shortcut(z, 3, flow_only=True)
         self.assertEqual(calls[-1][1], 0)
 
+    def test_shortcut_target_matches_two_step_endpoint(self):
+        # Equation (4): one target step must reproduce the endpoint of two
+        # half steps, even when the field depends on state, time and distance.
+        for resolution in (2, 8, 128):
+            calls = []
+
+            def field(z, t, distance):
+                velocity = z.square() * 0.1 + t[:, None, None] + distance[:, None, None]
+                calls.append((z.clone(), velocity.clone(), distance.clone()))
+                return velocity
+
+            wrapper = ShortcutModel(field, max_train_steps=resolution)
+            z, t, target, step = wrapper.get_shortcut_train_tuple(
+                torch.randn(256, 8, 3), torch.randn(256, 8, 3)
+            )
+            half = step[:, None, None] / 2
+            teacher_endpoint = calls[1][0] + half * calls[1][1]
+            student_target_endpoint = z + step[:, None, None] * target
+            torch.testing.assert_close(student_target_endpoint, teacher_endpoint)
+            self.assertTrue(torch.all(t + step <= 1))
+            self.assertTrue(torch.all(step >= 2 / resolution))
+            self.assertTrue(torch.all(calls[0][2][step == 2 / resolution] == 0))
+
+    def test_bootstrap_gradient_only_uses_student_branch(self):
+        # Analytical semi-gradient: d/dw mean((w*z - stopgrad(target))^2).
+        weight = nn.Parameter(torch.tensor(0.7))
+        teacher_condition = torch.randn(8, 1, 1, requires_grad=True)
+
+        def field(z, t, distance, condition):
+            return weight * z + condition + t[:, None, None]
+
+        wrapper = ShortcutModel(field)
+        z, t, target, step = wrapper.get_shortcut_train_tuple(
+            torch.randn(8, 8, 3), torch.randn(8, 8, 3),
+            condition=teacher_condition,
+        )
+        self.assertFalse(target.requires_grad)
+        student_condition = teacher_condition.detach().clone().requires_grad_(True)
+        prediction = field(z, t, step, student_condition)
+        expected_weight_gradient = (2 * (prediction.detach() - target) * z).mean()
+        torch.nn.functional.mse_loss(prediction, target).backward()
+        torch.testing.assert_close(weight.grad, expected_weight_gradient)
+        self.assertIsNone(teacher_condition.grad)
+        self.assertGreater(student_condition.grad.abs().sum().item(), 0)
+
     def test_step_conditioning_and_backward(self):
         policy = make_policy()
         z, t, cond = torch.randn(2, 8, 3), torch.zeros(2), torch.randn(2, 6)
         a = policy.forward_model(z, t, distance=0., cond_BG=cond)
-        b = policy.forward_model(z, t, distance=.5, cond_BG=cond)
-        self.assertFalse(torch.allclose(a, b))
+        for other_t, other_distance, other_obs in (
+            (t, .5, cond), (t + .5, 0., cond), (t, 0., cond + 1),
+        ):
+            b = policy.forward_model(z, other_t, distance=other_distance, cond_BG=other_obs)
+            self.assertFalse(torch.allclose(a, b))
         for batch_size in (1, 4):
             policy.zero_grad()
             loss = policy.compute_loss(make_batch(batch_size))
